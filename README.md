@@ -168,8 +168,11 @@ Best practical workflow on Android:
 - `scripts/ai_cli.py` — AI chat CLI (OpenAI, Anthropic), REPL and one-shot
 - `scripts/local_llm.py` — local llama.cpp CLI, REPL and one-shot
 - `scripts/install_termux.sh` — minimal setup helper
+- `scripts/uninstall.sh` — removes what the installer created
 - `install.sh` — full automated 10-step installer
 - `tests/test_ai_cli.py`, `tests/test_local_llm.py` — unit tests for both CLIs
+- `tests/test_dependencies.py` — guards against dependency drift
+- `tests/test_shim_and_errors.py` — deprecation shim and API error mapping
 - `.env.example` — sample environment variables
 - `requirements.txt` — Python dependencies
 - `LICENSE` — MIT
@@ -185,7 +188,22 @@ python -m pytest -q
 CI (`.github/workflows/ci.yml`) runs the syntax checks and tests on every
 push to `main` and every pull request.
 
-## 11) Example commands
+## 11) Uninstalling
+
+```bash
+bash scripts/uninstall.sh
+```
+
+Removes the virtual environment, the cloned scripts, downloaded models and
+the generated `.env` (which holds your API keys — you will need to re-enter
+them after reinstalling). It asks for confirmation first and leaves your own
+files in the directory alone. Termux packages such as `python` and `git` are
+left in place because other tools may depend on them; remove those by hand
+with `pkg uninstall` if you want.
+
+Pass a path to target a different directory: `bash scripts/uninstall.sh ~/andere-ort`.
+
+## 12) Example commands
 
 ```bash
 # start AI chat
