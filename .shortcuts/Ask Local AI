@@ -1,0 +1,60 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Termux widget: explain the clipboard with the local model.
+#
+# Install: copy this file to ~/.shortcuts/ (create it if needed), then add
+# the Termux:Widget widget to your home screen and pick "Ask Local AI".
+#
+# Requires the Termux:API add-on:
+#   pkg install termux-api
+#
+# Tapping the widget takes whatever is on the clipboard, runs it through the
+# local GGUF model, and shows the answer as a notification. Nothing leaves
+# the device. Falls back to the terminal without Termux:API.
+
+set -euo pipefail
+
+PROJECT_DIR="${AI_CLI_DIR:-$HOME/ai-projects}"
+VENV="$PROJECT_DIR/ai-env/bin/activate"
+
+if [ ! -f "$VENV" ]; then
+  echo "Virtual environment not found at $VENV"
+  echo "Run install.sh first, or set AI_CLI_DIR to the right directory."
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$VENV"
+
+cd "$PROJECT_DIR"
+
+if ! command -v termux-clipboard-get >/dev/null 2>&1; then
+  echo "termux-clipboard-get not found. Install the Termux:API add-on:"
+  echo "  pkg install termux-api"
+  exit 1
+fi
+
+TEXT=$(termux-clipboard-get 2>/dev/null || true)
+
+if [ -z "$TEXT" ]; then
+  echo "The clipboard is empty - copy some text first."
+  exit 0
+fi
+
+# Keep the prompt short so a small local model stays fast on a phone.
+PROMPT="Explain this in a few short sentences: $TEXT"
+
+ANSWER=$(printf '%s' "$PROMPT" | python local_llm.py -a --no-stream 2>&1) || {
+  if command -v termux-notification >/dev/null 2>&1; then
+    termux-notification --title "Local AI failed" --content "$ANSWER"
+  else
+    printf '%s\n' "$ANSWER" >&2
+  fi
+  exit 1
+}
+
+if command -v termux-notification >/dev/null 2>&1; then
+  termux-notification --title "Local AI" --content "$ANSWER" --button1 "Copy" \
+    --button1-action "termux-clipboard-set '$ANSWER'"
+else
+  printf '%s\n' "$ANSWER"
+fi

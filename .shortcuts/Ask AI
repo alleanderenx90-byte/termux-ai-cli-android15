@@ -1,0 +1,69 @@
+#!/data/data/com.termux/files/usr/bin/bash
+# Termux widget: ask a quick question without opening a terminal.
+#
+# Install: copy this file to ~/.shortcuts/ (create it if needed), then add
+# the Termux:Widget widget to your home screen and pick "Ask AI".
+#
+# Requires the Termux:API add-on:
+#   pkg install termux-api
+#
+# Tapping the widget opens a dialog, sends the question to the configured
+# provider, and shows the answer as a notification - the terminal never
+# appears. Without Termux:API it falls back to printing to the terminal.
+
+set -euo pipefail
+
+PROJECT_DIR="${AI_CLI_DIR:-$HOME/ai-projects}"
+VENV="$PROJECT_DIR/ai-env/bin/activate"
+
+if [ ! -f "$VENV" ]; then
+  echo "Virtual environment not found at $VENV"
+  echo "Run install.sh first, or set AI_CLI_DIR to the right directory."
+  exit 1
+fi
+
+# shellcheck disable=SC1090
+source "$VENV"
+
+cd "$PROJECT_DIR"
+
+# Ask for the question. Fall back to the clipboard when the user leaves the
+# dialog empty - the common case is "explain this text I just copied".
+QUESTION=""
+if command -v termux-dialog >/dev/null 2>&1; then
+  QUESTION=$(termux-dialog -t "Ask AI" -i "Your question" 2>/dev/null \
+    | sed -n 's/.*"text": *"\(.*\)"/\1/p' || true)
+fi
+
+if [ -z "$QUESTION" ] && command -v termux-clipboard-get >/dev/null 2>&1; then
+  CLIP=$(termux-clipboard-get 2>/dev/null || true)
+  if [ -n "$CLIP" ]; then
+    QUESTION="Explain this briefly: $CLIP"
+  fi
+fi
+
+if [ -z "$QUESTION" ]; then
+  if command -v termux-dialog >/dev/null 2>&1; then
+    echo "No question entered."
+    exit 0
+  fi
+  # No Termux:API - run the REPL so the widget still does something useful.
+  exec python ai_cli.py
+fi
+
+ANSWER=$(printf '%s' "$QUESTION" | python ai_cli.py -a 2>&1) || {
+  # Surface the failure instead of notifying with an empty answer.
+  if command -v termux-notification >/dev/null 2>&1; then
+    termux-notification --title "Ask AI failed" --content "$ANSWER"
+  else
+    printf '%s\n' "$ANSWER" >&2
+  fi
+  exit 1
+}
+
+if command -v termux-notification >/dev/null 2>&1; then
+  termux-notification --title "AI" --content "$ANSWER" --button1 "Copy" \
+    --button1-action "termux-clipboard-set '$ANSWER'"
+else
+  printf '%s\n' "$ANSWER"
+fi
