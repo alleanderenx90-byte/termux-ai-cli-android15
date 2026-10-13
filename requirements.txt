@@ -1,6 +1,11 @@
+# Keep this in sync with the pip list in install.sh, and only add packages
+# the scripts actually import - every extra one costs install time and
+# storage on a phone.
+#
+# Checked against the imports in scripts/: openai, anthropic, dotenv.
+# llama-cpp-python is deliberately absent: it needs a compiler and is
+# optional (only scripts/local_llm.py uses it), so the README installs it
+# separately.
 openai>=1.40.0
 anthropic>=0.30.0
-transformers>=4.44.0
-huggingface_hub>=0.24.0
 python-dotenv>=1.0.0
-requests>=2.32.0

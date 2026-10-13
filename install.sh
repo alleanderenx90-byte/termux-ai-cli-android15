@@ -53,20 +53,19 @@ pip install --upgrade pip setuptools wheel
 
 # Step 7: Install all AI dependencies
 echo "[7/10] Installing AI CLI packages..."
-# NOTE: `pip` has no `-y` flag - it never asks for confirmation, so passing one
-# aborts the whole script with "no such option: -y".
+# NOTE: `pip` has no `-y` flag - it never prompts, so passing one aborts the
+# whole script with "no such option: -y".
+#
+# Keep this list in sync with requirements.txt and only add what the scripts
+# actually import. torch alone is ~2 GB and none of the scripts use it -
+# transformers, huggingface_hub, requests, pydantic, typer and rich are
+# likewise unused, and every extra package costs install time and storage on
+# a phone.
 pip install \
   openai \
   anthropic \
-  transformers \
-  huggingface_hub \
-  torch \
-  llama-cpp-python \
   python-dotenv \
-  requests \
-  pydantic \
-  typer \
-  rich
+  llama-cpp-python
 
 # Step 8: Clone repo and copy scripts
 echo "[8/10] Setting up AI CLI scripts..."
@@ -88,8 +87,8 @@ OPENAI_API_KEY=your_openai_api_key_here
 # Anthropic Configuration
 ANTHROPIC_API_KEY=your_anthropic_api_key_here
 
-# Hugging Face Configuration
-HF_TOKEN=your_huggingface_token_here
+# Default provider for the CLIs: openai or anthropic
+AI_PROVIDER=
 
 # Model paths
 MODEL_DIR=$HOME/ai-projects/models

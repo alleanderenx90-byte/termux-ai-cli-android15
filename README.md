@@ -5,11 +5,10 @@ A ready-to-use Termux setup for running AI CLI tools on Android 15.
 Features:
 - Termux installation and setup
 - Python + virtual environment
-- OpenAI API CLI
-- Anthropic API CLI
-- Hugging Face access
-- local LLM experiment workflow with llama.cpp
-- simple examples and scripts
+- OpenAI API CLI (REPL and one-shot)
+- Anthropic API CLI (REPL and one-shot)
+- local LLM chat via llama.cpp, with streaming
+- pipe-friendly output for scripts and Termux widgets
 
 ## Requirements
 - Android 15 device
@@ -58,7 +57,6 @@ Edit `.env` and set your keys:
 ```bash
 OPENAI_API_KEY=your_openai_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
-HF_TOKEN=your_huggingface_token_here
 ```
 
 ## 5) Run the AI CLI
