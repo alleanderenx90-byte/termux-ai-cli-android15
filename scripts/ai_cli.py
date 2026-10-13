@@ -135,14 +135,46 @@ def chat(provider: str, prompt: str, model: str = None, max_tokens: int = None) 
 
     model = resolve_model(provider, model)
 
-    if provider == "openai":
-        client = OpenAI(api_key=api_key)
-        kwargs = {"model": model, "messages": [{"role": "user", "content": prompt}]}
-        if max_tokens:
-            kwargs["max_tokens"] = max_tokens
-        response = client.chat.completions.create(**kwargs)
-        return response.choices[0].message.content or ""
+    try:
+        if provider == "openai":
+            return _openai_chat(api_key, model, prompt, max_tokens)
+        return _anthropic_chat(api_key, model, prompt, max_tokens)
+    except RuntimeError:
+        raise
+    except Exception as exc:
+        raise RuntimeError(explain_api_error(exc)) from exc
 
+
+def explain_api_error(exc):
+    """Turn a provider exception into something a user can act on.
+
+    The raw SDK messages ("Error code: 429 - ...") tell you what happened but
+    not what to do about it, and they are easy to miss on a phone.
+    """
+    text = str(exc).lower()
+    if "429" in text or "rate limit" in text or "quota" in text:
+        return "rate limit or quota reached - wait a moment, or check your plan and billing"
+    if "401" in text or "invalid api key" in text or "unauthorized" in text:
+        return f"the API key was rejected - check it in .env"
+    if "404" in text or "model" in text and "not found" in text:
+        return "that model does not exist for your account - try --model with a different name"
+    if "timeout" in text or "timed out" in text or "connection" in text:
+        return "could not reach the provider - check your connection and try again"
+    if "context length" in text or "too long" in text:
+        return "the prompt is too long for this model - shorten it or lower --max-tokens"
+    return f"{exc}"
+
+
+def _openai_chat(api_key, model, prompt, max_tokens):
+    client = OpenAI(api_key=api_key)
+    kwargs = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+    if max_tokens:
+        kwargs["max_tokens"] = max_tokens
+    response = client.chat.completions.create(**kwargs)
+    return response.choices[0].message.content or ""
+
+
+def _anthropic_chat(api_key, model, prompt, max_tokens):
     client = anthropic.Anthropic(api_key=api_key)
     kwargs = {
         "model": model,
