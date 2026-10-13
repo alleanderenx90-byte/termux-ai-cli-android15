@@ -57,6 +57,8 @@ Edit `.env` and set your keys:
 ```bash
 OPENAI_API_KEY=your_openai_key_here
 ANTHROPIC_API_KEY=your_anthropic_key_here
+# Optional: pin a model instead of using the per-provider default
+AI_MODEL=
 ```
 
 ## 5) Run the AI CLI
@@ -92,6 +94,18 @@ termux-battery-status | python scripts/ai_cli.py -a -p "Explain this status"
 
 # override the model
 python scripts/ai_cli.py -p "hi" --model gpt-4o
+
+# see which models are available
+python scripts/ai_cli.py --list-models
+```
+
+Model resolution order: `--model`, then `AI_MODEL` in the environment (or
+`.env`), then a per-provider default (`gpt-5.4-mini` for OpenAI,
+`claude-sonnet-5-5` for Anthropic). Set `AI_MODEL` to pin one across every
+call:
+
+```bash
+AI_MODEL=gpt-5.5 python scripts/ai_cli.py -p "hi"
 ```
 
 `AI_PROVIDER` in the environment (or `.env`) sets the default provider so you

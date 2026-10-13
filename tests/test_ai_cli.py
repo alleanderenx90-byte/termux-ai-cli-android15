@@ -83,13 +83,59 @@ def test_anthropic_chat_concatenates_text_blocks(monkeypatch):
 
 
 def test_model_defaults_per_provider():
-    assert ai_cli.DEFAULT_MODELS["openai"] == "gpt-4o-mini"
-    assert ai_cli.DEFAULT_MODELS["anthropic"].startswith("claude")
+    assert ai_cli.DEFAULT_MODELS["openai"] == "gpt-5.4-mini"
+    assert ai_cli.DEFAULT_MODELS["anthropic"] == "claude-sonnet-5-5"
 
 
 def test_resolve_model_uses_requested_override():
     assert ai_cli.resolve_model("openai", "gpt-4o") == "gpt-4o"
     assert ai_cli.resolve_model("openai", None) == ai_cli.DEFAULT_MODELS["openai"]
+
+
+def test_resolve_model_falls_back_to_ai_model_env(monkeypatch):
+    monkeypatch.delenv("AI_MODEL", raising=False)
+    assert ai_cli.resolve_model("openai", None) == ai_cli.DEFAULT_MODELS["openai"]
+    monkeypatch.setenv("AI_MODEL", "gpt-5.5")
+    assert ai_cli.resolve_model("openai", None) == "gpt-5.5"
+
+
+def test_explicit_model_beats_ai_model_env(monkeypatch):
+    monkeypatch.setenv("AI_MODEL", "gpt-5.5")
+    assert ai_cli.resolve_model("openai", "gpt-4o") == "gpt-4o"
+
+
+def test_list_models_shows_defaults(capsys):
+    assert ai_cli.list_models() == 0
+    out = capsys.readouterr().out
+    assert "openai:" in out and "anthropic:" in out
+    # The default must be the one that is actually used by default.
+    assert ai_cli.DEFAULT_MODELS["openai"] in out
+    assert ai_cli.DEFAULT_MODELS["anthropic"] in out
+    assert "* = default" in out
+
+
+def test_list_models_marks_exactly_one_default_per_provider(capsys):
+    ai_cli.list_models()
+    out = capsys.readouterr().out
+    for provider in ai_cli.KNOWN_MODELS:
+        # Stop at the next "provider:" header rather than relying on a blank
+        # line, so a provider block cannot bleed into the next one.
+        block = out.split(f"{provider}:")[1]
+        for other in ai_cli.KNOWN_MODELS:
+            if other != provider:
+                block = block.split(f"\n{other}:")[0]
+        marked = [line for line in block.splitlines() if line.startswith(" *")]
+        assert len(marked) == 1, (
+            f"{provider} must mark exactly one default, got {len(marked)}"
+        )
+        assert ai_cli.DEFAULT_MODELS[provider] in marked[0]
+
+
+def test_default_model_is_listed_as_known():
+    """A default that is not in the list would be invisible to --list-models."""
+    for provider, default in ai_cli.DEFAULT_MODELS.items():
+        names = [name for name, _ in ai_cli.KNOWN_MODELS[provider]]
+        assert default in names, f"{provider} default {default} is not listed"
 
 
 # --- CLI argument parsing --------------------------------------------------
@@ -223,8 +269,19 @@ def test_main_help_lists_options(capsys):
         ai_cli.main(["--help"])
     assert exc.value.code == 0
     text = capsys.readouterr().out
-    for flag in ("--prompt", "--provider", "--model", "--answer-only", "--max-tokens", "--version"):
+    for flag in ("--prompt", "--provider", "--model", "--answer-only",
+                 "--max-tokens", "--list-models", "--version"):
         assert flag in text
+
+
+def test_list_models_flag_prints_and_exits(monkeypatch, capsys):
+    """--list-models must not need a provider or a key."""
+    monkeypatch.setenv("AI_PROVIDER", "anthropic")
+    def explode(*_a, **_k):
+        raise AssertionError("must not resolve a provider")
+    monkeypatch.setattr(ai_cli, "resolve_provider", explode)
+    assert ai_cli.main(["--list-models"]) == 0
+    assert "claude-sonnet-5-5" in capsys.readouterr().out
 
 
 def test_version_flag_prints_version(capsys):
