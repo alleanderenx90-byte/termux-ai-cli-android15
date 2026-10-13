@@ -19,7 +19,7 @@ jobs:
         run: python -m compileall -q scripts tests
 
       - name: Shell syntax check
-        run: bash -n install.sh && bash -n scripts/install_termux.sh
+        run: bash -n install.sh && bash -n scripts/install_termux.sh && bash -n scripts/uninstall.sh
 
       - name: Install dependencies
         run: pip install pytest openai anthropic python-dotenv

@@ -2,13 +2,47 @@
 set -euo pipefail
 
 # Termux AI CLI - Full Automated Installation for Android 15
-# One-command setup for OpenAI, Anthropic, Hugging Face, local LLMs
+# One-command setup for OpenAI, Anthropic and local LLMs
 
-echo "================================================"
+echo "================================================="
 echo "Termux AI CLI - Full Automated Setup"
 echo "Android 15 Edition"
-echo "================================================"
+echo "================================================="
 echo ""
+
+# --- Preflight -----------------------------------------------------------
+# Check everything that is needed BEFORE spending ten minutes on package
+# updates. Without this, a missing tool only surfaces at step 8, after the
+# long steps have already run.
+preflight_failed=0
+
+for cmd in pkg python git; do
+  if ! command -v "$cmd" >/dev/null 2>&1; then
+    echo "ERROR: required command '$cmd' not found." >&2
+    preflight_failed=1
+  fi
+done
+
+# git is installed by step 2, but only if pkg itself works - a missing pkg
+# means nothing below can run at all.
+if ! command -v pkg >/dev/null 2>&1; then
+  echo "ERROR: 'pkg' not found - this script must run inside Termux." >&2
+  echo "       Install Termux from F-Droid and run it there." >&2
+  exit 1
+fi
+
+if [ "$preflight_failed" -ne 0 ]; then
+  echo "Aborting before any changes. See the messages above." >&2
+  exit 1
+fi
+
+# Warn (do not abort) when the target already exists - a re-run would
+# overwrite a working venv and drop installed packages.
+PROJECT_DIR="$HOME/ai-projects"
+if [ -d "$PROJECT_DIR/ai-env" ]; then
+  echo "NOTE: $PROJECT_DIR/ai-env already exists."
+  echo "      A re-run will reuse it; remove it first for a clean install."
+fi
 
 # Step 1: Update packages
 echo "[1/10] Updating Termux packages..."
@@ -37,8 +71,8 @@ echo "[3/10] Granting storage access..."
 termux-setup-storage
 
 # Step 4: Create project directory
+# (PROJECT_DIR is already set in the preflight section)
 echo "[4/10] Creating project directories..."
-PROJECT_DIR="$HOME/ai-projects"
 mkdir -p "$PROJECT_DIR"
 cd "$PROJECT_DIR"
 
