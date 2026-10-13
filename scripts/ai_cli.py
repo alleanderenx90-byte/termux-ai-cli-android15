@@ -39,10 +39,28 @@ ENV_FILE = ROOT / ".env"
 if ENV_FILE.exists():
     load_dotenv(ENV_FILE)
 
-# Model per provider, overridable with --model.
+# Default model per provider. Kept as a plain dict so --list-models can show
+# them and a user can override any of them with --model or the AI_MODEL
+# environment variable. Verified against the provider docs in October 2026.
 DEFAULT_MODELS = {
-    "openai": "gpt-4o-mini",
-    "anthropic": "claude-3-5-sonnet-20241022",
+    "openai": "gpt-5.4-mini",
+    "anthropic": "claude-sonnet-5-5",
+}
+
+# Alternatives worth knowing about, shown by --list-models.
+KNOWN_MODELS = {
+    "openai": [
+        ("gpt-5.5", "strongest, for complex work"),
+        ("gpt-5.4", "balanced flagship"),
+        ("gpt-5.4-mini", "fast and cheap - the default"),
+        ("gpt-4o-mini", "older small model, still supported"),
+    ],
+    "anthropic": [
+        ("claude-fable-5-1", "demanding reasoning, long agentic work"),
+        ("claude-opus-5-5", "long-running coding and knowledge work"),
+        ("claude-sonnet-5-5", "speed and intelligence - the default"),
+        ("claude-haiku-5-5", "fastest and cheapest, high volume"),
+    ],
 }
 
 PROVIDER_CHOICES = {
@@ -87,6 +105,11 @@ def build_parser():
         help="Cap the answer length in tokens (provider default if omitted)",
     )
     parser.add_argument(
+        "--list-models",
+        action="store_true",
+        help="List the models worth knowing about per provider and exit",
+    )
+    parser.add_argument(
         "-a",
         "--answer-only",
         action="store_true",
@@ -124,7 +147,20 @@ def resolve_provider(args):
 
 
 def resolve_model(provider, requested):
-    return requested or DEFAULT_MODELS[provider]
+    """--model wins, then AI_MODEL from the environment, then the default."""
+    return requested or os.getenv("AI_MODEL") or DEFAULT_MODELS[provider]
+
+
+def list_models():
+    """Print the models worth knowing about per provider."""
+    for provider in sorted(KNOWN_MODELS):
+        default = DEFAULT_MODELS[provider]
+        print(f"{provider}:")
+        for name, note in KNOWN_MODELS[provider]:
+            marker = "*" if name == default else " "
+            print(f" {marker} {name:<22} {note}")
+    print("\n* = default, override with --model or the AI_MODEL variable")
+    return 0
 
 
 def chat(provider: str, prompt: str, model: str = None, max_tokens: int = None) -> str:
@@ -246,6 +282,10 @@ def run_interactive(provider, model):
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
+
+    if args.list_models:
+        return list_models()
+
     provider = resolve_provider(args)
 
     # Precedence: --prompt, then piped stdin, then interactive.
