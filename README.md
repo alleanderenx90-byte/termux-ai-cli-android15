@@ -73,6 +73,36 @@ The script will let you choose a provider:
 - OpenAI
 - Anthropic
 
+### One-shot and scripting
+
+Ask a single question without entering the REPL:
+
+```bash
+python scripts/ai_cli.py -p "Explain recursion in Python"
+```
+
+The prompt can also come from a pipe, and `--provider` / `--model` skip the
+interactive picker — handy in scripts and Termux widgets:
+
+```bash
+# provider pinned, plain answer only (no "AI>" prefix)
+python scripts/ai_cli.py --provider anthropic -p "Summarize this in one line" -a
+
+# pipe a file or command output
+cat notes.txt | python scripts/ai_cli.py -a --provider openai
+termux-battery-status | python scripts/ai_cli.py -a -p "Explain this status"
+
+# override the model
+python scripts/ai_cli.py -p "hi" --model gpt-4o
+```
+
+`AI_PROVIDER` in the environment (or `.env`) sets the default provider so you
+don't have to pass `--provider` every time. Exit code is `0` on success and `1`
+on an error (missing key, empty prompt, API failure); errors go to stderr, so
+`-a` output is safe to pipe into other commands.
+
+Use `python scripts/ai_cli.py --help` for the full list of options.
+
 ## 6) Local LLM example
 
 For lightweight local models using llama.cpp:
