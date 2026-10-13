@@ -108,11 +108,25 @@ Best practical workflow on Android:
 
 - `scripts/ai_cli.py` — interactive AI chat CLI
 - `scripts/local_llm_test.py` — local llama.cpp example
-- `scripts/install_termux.sh` — one-command setup helper
+- `scripts/install_termux.sh` — minimal setup helper
+- `install.sh` — full automated 10-step installer
+- `tests/test_ai_cli.py` — unit tests for the CLI helpers
 - `.env.example` — sample environment variables
 - `requirements.txt` — Python dependencies
+- `LICENSE` — MIT
 
-## 10) Example commands
+## 10) Development
+
+Run the test suite locally:
+
+```bash
+python -m pytest -q
+```
+
+CI (`.github/workflows/ci.yml`) runs the syntax checks and tests on every
+push to `main` and every pull request.
+
+## 11) Example commands
 
 ```bash
 # start AI chat
