@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Syntax check
+        run: python -m compileall -q scripts tests
+
+      - name: Shell syntax check
+        run: bash -n install.sh && bash -n scripts/install_termux.sh
+
+      - name: Install dependencies
+        run: pip install pytest openai anthropic python-dotenv
+
+      - name: Run tests
+        run: python -m pytest -q
+
+      - name: Verify no secrets are committed
+        run: |
+          if [ -f .env ]; then
+            echo "::error::.env is committed - remove it from git history"
+            exit 1
+          fi

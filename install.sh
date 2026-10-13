@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
 # Termux AI CLI - Full Automated Installation for Android 15
 # One-command setup for OpenAI, Anthropic, Hugging Face, local LLMs
@@ -53,7 +53,9 @@ pip install --upgrade pip setuptools wheel
 
 # Step 7: Install all AI dependencies
 echo "[7/10] Installing AI CLI packages..."
-pip install -y \
+# NOTE: `pip` has no `-y` flag - it never asks for confirmation, so passing one
+# aborts the whole script with "no such option: -y".
+pip install \
   openai \
   anthropic \
   transformers \
@@ -71,7 +73,10 @@ echo "[8/10] Setting up AI CLI scripts..."
 if [ ! -d "$PROJECT_DIR/termux-ai-cli" ]; then
   git clone https://github.com/alleanderenx90-byte/termux-ai-cli-android15 termux-ai-cli
 fi
-cp -v termux-ai-cli/scripts/* . 2>/dev/null || true
+# Only the runnable Python scripts belong next to the venv - the installer
+# helper is not usable from this location.
+cp -v termux-ai-cli/scripts/ai_cli.py \
+      termux-ai-cli/scripts/local_llm_test.py . 2>/dev/null || true
 
 # Step 9: Create .env file
 echo "[9/10] Creating .env configuration file..."

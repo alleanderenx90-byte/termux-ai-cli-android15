@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+
 """Simple local LLM test using llama.cpp.
 
 Install optional dependency:
@@ -41,8 +42,16 @@ llm = Llama(
     n_threads=max(1, (os.cpu_count() or 1) // 2),
 )
 
+print("Type 'exit' or 'quit' to end the session.")
+
 while True:
-    prompt = input("\nPrompt> ").strip()
+    try:
+        prompt = input("\nPrompt> ").strip()
+    except EOFError:
+        # Ctrl-D ends the session instead of dumping a traceback.
+        print()
+        break
+
     if not prompt:
         continue
     if prompt.lower() in {"exit", "quit"}:

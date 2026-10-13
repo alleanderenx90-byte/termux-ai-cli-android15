@@ -36,8 +36,15 @@ def get_provider_choice():
     print("Choose AI provider:")
     print("1) OpenAI")
     print("2) Anthropic")
-    choice = input("Enter 1 or 2: ").strip()
-    return PROVIDERS.get(choice, "openai")
+
+    for _ in range(3):
+        choice = input("Enter 1 or 2: ").strip()
+        if choice in PROVIDERS:
+            return PROVIDERS[choice]
+        print(f"'{choice}' is not a valid choice. Please enter 1 or 2.")
+
+    print("Too many invalid attempts, defaulting to OpenAI.")
+    return "openai"
 
 
 def openai_chat(prompt: str):
