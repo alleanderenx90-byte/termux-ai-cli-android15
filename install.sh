@@ -76,7 +76,7 @@ fi
 # Only the runnable Python scripts belong next to the venv - the installer
 # helper is not usable from this location.
 cp -v termux-ai-cli/scripts/ai_cli.py \
-      termux-ai-cli/scripts/local_llm_test.py . 2>/dev/null || true
+      termux-ai-cli/scripts/local_llm.py . 2>/dev/null || true
 
 # Step 9: Create .env file
 echo "[9/10] Creating .env configuration file..."
@@ -121,8 +121,9 @@ echo ""
 echo "3. Run AI CLI (interactive chat):"
 echo "   python ai_cli.py"
 echo ""
-echo "4. Test local LLM (optional, requires GGUF model):"
-echo "   python local_llm_test.py"
+echo "4. Chat with a local model (optional, requires a GGUF model in models/):"
+echo "   python local_llm.py"
+echo "   python local_llm.py --list-models    # see what is available"
 echo ""
 echo "5. Quick info:"
 echo "   neofetch"
