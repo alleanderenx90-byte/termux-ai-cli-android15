@@ -104,6 +104,19 @@ def test_parser_defaults():
     assert args.max_tokens == 200
     assert args.answer_only is False
     assert args.list_models is False
+    assert args.stream is True       # streaming is the default on slow hardware
+
+
+def test_no_stream_flag_disables_streaming():
+    args = local_llm.build_parser().parse_args(["--no-stream"])
+    assert args.stream is False
+
+
+def test_version_flag_prints_version(capsys):
+    with pytest.raises(SystemExit) as exc:
+        local_llm.main(["--version"])
+    assert exc.value.code == 0
+    assert local_llm.__version__ in capsys.readouterr().out
 
 
 def test_parser_accepts_generation_flags():
@@ -122,10 +135,12 @@ def test_parser_rejects_non_numeric_context():
 # --- loading and generation ------------------------------------------------
 
 class FakeLLM:
+    """Non-streaming stub; accepts stream= so the new default does not break it."""
+
     def __init__(self, *args, **kwargs):
         self.init_kwargs = kwargs
 
-    def __call__(self, prompt, **kwargs):
+    def __call__(self, prompt, stream=False, **kwargs):
         return {"choices": [{"text": f"  answer to: {prompt}  "}]}
 
 
@@ -150,8 +165,54 @@ def test_load_llm_defaults_threads_to_half_the_cores(monkeypatch):
 
 def test_generate_strips_whitespace():
     llm = FakeLLM()
+    args = local_llm.build_parser().parse_args(["--no-stream"])
+    text, streamed = local_llm.generate(llm, "hi", args)
+    assert text == "answer to: hi"
+    assert streamed is False       # caller must print it
+
+
+class StreamingLLM:
+    """Yields token chunks like llama-cpp-python does with stream=True."""
+
+    def __init__(self, *args, **kwargs):
+        self.stream_requested = None
+
+    def __call__(self, prompt, stream=False, **kwargs):
+        self.stream_requested = stream
+        if stream:
+            text = "hello world"
+            for word in text.split(" "):
+                yield {"choices": [{"text": word + " "}]}
+        else:
+            return {"choices": [{"text": "whole answer"}]}
+
+
+def test_generate_streams_token_by_token(capsys):
+    llm = StreamingLLM()
     args = local_llm.build_parser().parse_args([])
-    assert local_llm.generate(llm, "hi", args) == "answer to: hi"
+    answer, streamed = local_llm.generate(llm, "hi", args)
+    assert llm.stream_requested is True
+    assert answer == "hello world"
+    assert streamed is True        # already printed, caller must not re-print
+    # tokens appeared as they arrived, not all at the end
+    out = capsys.readouterr().out
+    assert "hello " in out and "world " in out
+
+
+def test_generate_falls_back_when_stream_unsupported(capsys):
+    """Older llama-cpp-python raises on stream=True - must not crash or
+    lose the answer."""
+
+    class NoStreamLLM:
+        def __call__(self, prompt, stream=False, **kwargs):
+            if stream:
+                raise TypeError("stream is not a valid keyword")
+            return {"choices": [{"text": "  fallback answer  "}]}
+
+    args = local_llm.build_parser().parse_args([])
+    text, streamed = local_llm.generate(NoStreamLLM(), "hi", args)
+    assert text == "fallback answer"
+    assert streamed is False       # nothing printed yet, caller prints it
 
 
 # --- main() end to end -----------------------------------------------------
@@ -172,7 +233,7 @@ def test_main_reports_missing_model(models_dir, capsys):
 def test_main_one_shot_plain_answer(models_dir, monkeypatch, capsys):
     _make_model(models_dir, "m.gguf")
     monkeypatch.setattr(local_llm, "load_llm", lambda path, args: (FakeLLM(), None))
-    args = ["-p", "hi", "-a", "--model", "m.gguf"]
+    args = ["-p", "hi", "-a", "--no-stream", "--model", "m.gguf"]
     assert local_llm.main(args) == 0
     assert capsys.readouterr().out.strip() == "answer to: hi"
 
@@ -180,7 +241,7 @@ def test_main_one_shot_plain_answer(models_dir, monkeypatch, capsys):
 def test_main_one_shot_prefixed_answer(models_dir, monkeypatch, capsys):
     _make_model(models_dir, "m.gguf")
     monkeypatch.setattr(local_llm, "load_llm", lambda path, args: (FakeLLM(), None))
-    assert local_llm.main(["-p", "hi", "--model", "m.gguf"]) == 0
+    assert local_llm.main(["-p", "hi", "--no-stream", "--model", "m.gguf"]) == 0
     assert "AI> answer to: hi" in capsys.readouterr().out
 
 
@@ -193,7 +254,7 @@ def test_main_reads_prompt_from_stdin(models_dir, monkeypatch, capsys):
             return False
 
     monkeypatch.setattr(local_llm.sys, "stdin", FakeStdin("what is 2+2\n"))
-    assert local_llm.main(["-a", "--model", "m.gguf"]) == 0
+    assert local_llm.main(["-a", "--no-stream", "--model", "m.gguf"]) == 0
     assert capsys.readouterr().out.strip() == "answer to: what is 2+2"
 
 
@@ -206,7 +267,7 @@ def test_main_interactive_then_exit(models_dir, monkeypatch, capsys):
             return True
 
     monkeypatch.setattr(local_llm.sys, "stdin", FakeStdin("hello\nexit\n"))
-    assert local_llm.main(["--model", "m.gguf"]) == 0
+    assert local_llm.main(["--no-stream", "--model", "m.gguf"]) == 0
     out = capsys.readouterr().out
     assert "Model: m.gguf" in out
     assert "AI> answer to: hello" in out
@@ -221,7 +282,7 @@ def test_main_exits_cleanly_on_eof(models_dir, monkeypatch, capsys):
             return True
 
     monkeypatch.setattr(local_llm.sys, "stdin", FakeStdin(""))
-    assert local_llm.main(["--model", "m.gguf"]) == 0
+    assert local_llm.main(["--no-stream", "--model", "m.gguf"]) == 0
     assert "Model: m.gguf" in capsys.readouterr().out
 
 
@@ -230,5 +291,33 @@ def test_main_help_lists_options(capsys):
         local_llm.main(["--help"])
     assert exc.value.code == 0
     text = capsys.readouterr().out
-    for flag in ("--prompt", "--model", "--context", "--max-tokens", "--list-models"):
+    for flag in ("--prompt", "--model", "--context", "--max-tokens",
+                 "--list-models", "--no-stream", "--version"):
         assert flag in text
+
+
+def test_main_streams_when_answer_only(models_dir, monkeypatch, capsys):
+    """-a with streaming must emit only the tokens, no prefix or blank lines."""
+    _make_model(models_dir, "m.gguf")
+    monkeypatch.setattr(local_llm, "load_llm", lambda path, args: (StreamingLLM(), None))
+    assert local_llm.main(["-a", "-p", "hi", "--model", "m.gguf"]) == 0
+    assert capsys.readouterr().out.strip() == "hello world"
+
+
+def test_main_streams_with_prefix_when_not_answer_only(models_dir, monkeypatch, capsys):
+    _make_model(models_dir, "m.gguf")
+    monkeypatch.setattr(local_llm, "load_llm", lambda path, args: (StreamingLLM(), None))
+    assert local_llm.main(["-p", "hi", "--model", "m.gguf"]) == 0
+    out = capsys.readouterr().out
+    # The stream prints itself; no separate "AI>" line is added.
+    assert out.strip() == "hello world"
+
+
+def test_main_prefix_is_not_duplicated_when_streaming(models_dir, monkeypatch, capsys):
+    """Regression: the answer must appear exactly once, with no stray 'AI>'."""
+    _make_model(models_dir, "m.gguf")
+    monkeypatch.setattr(local_llm, "load_llm", lambda path, args: (StreamingLLM(), None))
+    assert local_llm.main(["-p", "hi", "--model", "m.gguf"]) == 0
+    out = capsys.readouterr().out
+    assert out.count("hello world") == 1
+    assert "AI>" not in out
