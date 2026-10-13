@@ -183,6 +183,7 @@ Best practical workflow on Android:
 - `scripts/local_llm.py` — local llama.cpp CLI, REPL and one-shot
 - `scripts/install_termux.sh` — minimal setup helper
 - `scripts/uninstall.sh` — removes what the installer created
+- `.shortcuts/` — Termux home-screen widgets
 - `install.sh` — full automated 10-step installer
 - `tests/test_ai_cli.py`, `tests/test_local_llm.py` — unit tests for both CLIs
 - `tests/test_dependencies.py` — guards against dependency drift
@@ -202,7 +203,36 @@ python -m pytest -q
 CI (`.github/workflows/ci.yml`) runs the syntax checks and tests on every
 push to `main` and every pull request.
 
-## 11) Uninstalling
+## 11) Termux widgets
+
+Both CLIs are built to be called without a terminal, which makes them usable
+as home-screen widgets. Two ready-made ones ship in `.shortcuts/`:
+
+```bash
+# install: copy to the Termux shortcuts directory
+mkdir -p ~/.shortcuts
+cp ".shortcuts/Ask AI" ".shortcuts/Ask Local AI" ~/.shortcuts/
+```
+
+Then add the **Termux:Widget** widget to your home screen and pick one of
+them. Requires the Termux:API add-on:
+
+```bash
+pkg install termux-api
+```
+
+- **Ask AI** — opens a small dialog, sends the question to your configured
+  provider, and shows the answer as a notification you can tap to copy. The
+  terminal never appears. Leave the dialog empty and it explains whatever is
+  on the clipboard instead.
+- **Ask Local AI** — takes the clipboard, runs it through your local GGUF
+  model, and notifies with the answer. Nothing leaves the device.
+
+Both fall back to the terminal when Termux:API is missing, and both accept
+`AI_CLI_DIR` to point at a project directory other than `~/ai-projects`.
+`AI_PROVIDER` and `AI_MODEL` apply as usual.
+
+## 12) Uninstalling
 
 ```bash
 bash scripts/uninstall.sh
@@ -217,7 +247,7 @@ with `pkg uninstall` if you want.
 
 Pass a path to target a different directory: `bash scripts/uninstall.sh ~/andere-ort`.
 
-## 12) Example commands
+## 13) Example commands
 
 ```bash
 # start AI chat
