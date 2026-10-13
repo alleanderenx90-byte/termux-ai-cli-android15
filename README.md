@@ -110,8 +110,30 @@ For lightweight local models using llama.cpp:
 ```bash
 pip install llama-cpp-python
 mkdir -p models
-python scripts/local_llm_test.py
 ```
+
+Download a small quantized model and drop it into `models/` — a good starting
+point is tinyllama:
+
+```bash
+wget -P models https://huggingface.co/TheBloke/TinyLlama-1.1B-1T-OpenOrca-GGUF/resolve/main/tinyllama-1.1b-1t-openorca.Q4_K_M.gguf
+```
+
+Then run the local CLI:
+
+```bash
+python scripts/local_llm.py                       # interactive, auto-picks the best model
+python scripts/local_llm.py --list-models         # what is available, with sizes
+python scripts/local_llm.py -p "Explain recursion" # one-shot answer
+cat notes.txt | python scripts/local_llm.py -a      # prompt from stdin
+python scripts/local_llm.py -p "hi" --model mistral-7b-instruct-v0.1.Q4_K_M.gguf
+```
+
+Useful flags: `-c/--context` (default 2048), `-t/--threads` (default: half the
+cores), `--temp` (0.7), `--max-tokens` (200), `-a/--answer-only` for scripts.
+`MODEL_DIR` in `.env` moves the model directory elsewhere. When several models
+are present, tinyllama is preferred over larger ones because it actually runs
+on a phone.
 
 This script expects a GGUF model in `models/` such as:
 
@@ -136,11 +158,11 @@ Best practical workflow on Android:
 
 ## 9) Files in this repo
 
-- `scripts/ai_cli.py` — interactive AI chat CLI
-- `scripts/local_llm_test.py` — local llama.cpp example
+- `scripts/ai_cli.py` — AI chat CLI (OpenAI, Anthropic), REPL and one-shot
+- `scripts/local_llm.py` — local llama.cpp CLI, REPL and one-shot
 - `scripts/install_termux.sh` — minimal setup helper
 - `install.sh` — full automated 10-step installer
-- `tests/test_ai_cli.py` — unit tests for the CLI helpers
+- `tests/test_ai_cli.py`, `tests/test_local_llm.py` — unit tests for both CLIs
 - `.env.example` — sample environment variables
 - `requirements.txt` — Python dependencies
 - `LICENSE` — MIT
@@ -162,8 +184,11 @@ push to `main` and every pull request.
 # start AI chat
 python scripts/ai_cli.py
 
-# quick local LLM test
-python scripts/local_llm_test.py
+# quick local LLM chat
+python scripts/local_llm.py
+
+# list available local models
+python scripts/local_llm.py --list-models
 
 # install Termux packages
 bash scripts/install_termux.sh
