@@ -14,6 +14,8 @@ import os
 import sys
 from pathlib import Path
 
+__version__ = "1.1.0"
+
 try:
     from dotenv import load_dotenv
 except ImportError:
@@ -61,6 +63,11 @@ def build_parser():
         epilog="Without --prompt the script starts an interactive session.",
     )
     parser.add_argument(
+        "-V", "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
         "-p",
         "--prompt",
         help="Prompt to answer once, then exit (piping stdin works too)",
@@ -73,6 +80,11 @@ def build_parser():
     parser.add_argument(
         "--model",
         help="Override the model name for the chosen provider",
+    )
+    parser.add_argument(
+        "--max-tokens",
+        type=int,
+        help="Cap the answer length in tokens (provider default if omitted)",
     )
     parser.add_argument(
         "-a",
@@ -115,7 +127,7 @@ def resolve_model(provider, requested):
     return requested or DEFAULT_MODELS[provider]
 
 
-def chat(provider: str, prompt: str, model: str = None) -> str:
+def chat(provider: str, prompt: str, model: str = None, max_tokens: int = None) -> str:
     """Send one prompt and return the answer text."""
     api_key = os.getenv(ENV_VARS[provider])
     if not api_key:
@@ -125,19 +137,21 @@ def chat(provider: str, prompt: str, model: str = None) -> str:
 
     if provider == "openai":
         client = OpenAI(api_key=api_key)
-        response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
-        )
+        kwargs = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+        if max_tokens:
+            kwargs["max_tokens"] = max_tokens
+        response = client.chat.completions.create(**kwargs)
         return response.choices[0].message.content or ""
 
     client = anthropic.Anthropic(api_key=api_key)
-    response = client.messages.create(
-        model=model,
-        max_tokens=512,
-        temperature=0.7,
-        messages=[{"role": "user", "content": prompt}],
-    )
+    kwargs = {
+        "model": model,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.7,
+    }
+    # max_tokens is required by the Anthropic API.
+    kwargs["max_tokens"] = max_tokens or 512
+    response = client.messages.create(**kwargs)
     text = ""
     for block in response.content:
         if getattr(block, "type", None) == "text":
@@ -161,7 +175,7 @@ def run_one_shot(args, provider, prompt):
         return 1
 
     try:
-        answer = chat(provider, prompt, model=args.model)
+        answer = chat(provider, prompt, model=args.model, max_tokens=args.max_tokens)
     except Exception as exc:
         print(f"Error: {exc}", file=sys.stderr)
         print("Check your .env file and API keys.", file=sys.stderr)
@@ -191,7 +205,7 @@ def run_interactive(provider, model):
             break
 
         try:
-            answer = chat(provider, prompt, model=model)
+            answer = chat(provider, prompt, model=model, max_tokens=args.max_tokens)
             print(f"\nAI> {answer}")
         except Exception as exc:
             print(f"\nError: {exc}")

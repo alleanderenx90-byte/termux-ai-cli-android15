@@ -97,11 +97,13 @@ python scripts/ai_cli.py -p "hi" --model gpt-4o
 ```
 
 `AI_PROVIDER` in the environment (or `.env`) sets the default provider so you
-don't have to pass `--provider` every time. Exit code is `0` on success and `1`
-on an error (missing key, empty prompt, API failure); errors go to stderr, so
-`-a` output is safe to pipe into other commands.
+don't have to pass `--provider` every time. `--max-tokens` caps the answer
+length. Exit code is `0` on success and `1` on an error (missing key, empty
+prompt, API failure); errors go to stderr, so `-a` output is safe to pipe into
+other commands.
 
-Use `python scripts/ai_cli.py --help` for the full list of options.
+Use `python scripts/ai_cli.py --help` for the full list of options, and
+`--version` to check which version is installed.
 
 ## 6) Local LLM example
 
@@ -134,6 +136,13 @@ cores), `--temp` (0.7), `--max-tokens` (200), `-a/--answer-only` for scripts.
 `MODEL_DIR` in `.env` moves the model directory elsewhere. When several models
 are present, tinyllama is preferred over larger ones because it actually runs
 on a phone.
+
+Answers stream token by token by default, which matters on a phone — at 4
+cores a 200-token answer can take minutes and streaming shows progress
+instead of a frozen terminal. Pass `--no-stream` to wait for the whole
+answer. Streamed output has no `AI>` prefix (the answer is still being
+written when the first token appears); use `-a` if you need pipe-clean
+output.
 
 This script expects a GGUF model in `models/` such as:
 

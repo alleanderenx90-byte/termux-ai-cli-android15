@@ -109,6 +109,16 @@ def test_parser_accepts_model_override():
     assert args.model == "gpt-4o"
 
 
+def test_parser_accepts_max_tokens():
+    args = ai_cli.build_parser().parse_args(["-p", "hi", "--max-tokens", "100"])
+    assert args.max_tokens == 100
+
+
+def test_parser_defaults_max_tokens_to_none():
+    args = ai_cli.build_parser().parse_args(["-p", "hi"])
+    assert args.max_tokens is None
+
+
 def test_parser_rejects_unknown_provider(capsys):
     with pytest.raises(SystemExit):
         ai_cli.build_parser().parse_args(["-p", "hi", "--provider", "bogus"])
@@ -146,7 +156,7 @@ def test_piped_input_without_provider_defaults_to_openai(monkeypatch):
 # --- one-shot and main() ---------------------------------------------------
 
 def test_one_shot_prints_plain_answer(monkeypatch, capsys):
-    monkeypatch.setattr(ai_cli, "chat", lambda provider, prompt, model=None: "the answer")
+    monkeypatch.setattr(ai_cli, "chat", lambda provider, prompt, model=None, max_tokens=None: "the answer")
     args = ai_cli.build_parser().parse_args(["-p", "hi", "-a"])
     assert ai_cli.run_one_shot(args, "openai", "hi") == 0
     out = capsys.readouterr().out
@@ -154,7 +164,7 @@ def test_one_shot_prints_plain_answer(monkeypatch, capsys):
 
 
 def test_one_shot_prints_prefixed_answer(monkeypatch, capsys):
-    monkeypatch.setattr(ai_cli, "chat", lambda provider, prompt, model=None: "the answer")
+    monkeypatch.setattr(ai_cli, "chat", lambda provider, prompt, model=None, max_tokens=None: "the answer")
     args = ai_cli.build_parser().parse_args(["-p", "hi"])
     assert ai_cli.run_one_shot(args, "openai", "hi") == 0
     assert "AI> the answer" in capsys.readouterr().out
@@ -179,7 +189,7 @@ def test_one_shot_reports_api_errors_on_stderr(monkeypatch, capsys):
 
 
 def test_main_reads_prompt_from_stdin(monkeypatch, capsys):
-    monkeypatch.setattr(ai_cli, "chat", lambda provider, prompt, model=None: "piped answer")
+    monkeypatch.setattr(ai_cli, "chat", lambda provider, prompt, model=None, max_tokens=None: "piped answer")
 
     class FakeStdin(io.StringIO):
         def isatty(self):
@@ -213,5 +223,26 @@ def test_main_help_lists_options(capsys):
         ai_cli.main(["--help"])
     assert exc.value.code == 0
     text = capsys.readouterr().out
-    for flag in ("--prompt", "--provider", "--model", "--answer-only"):
+    for flag in ("--prompt", "--provider", "--model", "--answer-only", "--max-tokens", "--version"):
         assert flag in text
+
+
+def test_version_flag_prints_version(capsys):
+    with pytest.raises(SystemExit) as exc:
+        ai_cli.main(["--version"])
+    assert exc.value.code == 0
+    assert ai_cli.__version__ in capsys.readouterr().out
+
+
+def test_max_tokens_is_forwarded_to_chat(monkeypatch, capsys):
+    """--max-tokens must reach the provider call, not be silently dropped."""
+    captured = {}
+
+    def fake_chat(provider, prompt, model=None, max_tokens=None):
+        captured["max_tokens"] = max_tokens
+        return "ok"
+
+    monkeypatch.setattr(ai_cli, "chat", fake_chat)
+    args = ai_cli.build_parser().parse_args(["-p", "hi", "--max-tokens", "42", "-a"])
+    assert ai_cli.run_one_shot(args, "openai", "hi") == 0
+    assert captured["max_tokens"] == 42

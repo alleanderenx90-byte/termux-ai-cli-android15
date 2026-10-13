@@ -20,6 +20,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
+__version__ = "1.1.0"
+
 # MODEL_DIR can be overridden in .env; default to <repo>/models.
 try:
     from dotenv import load_dotenv
@@ -92,6 +94,11 @@ def build_parser():
         epilog="Without --prompt the script starts an interactive session.",
     )
     parser.add_argument(
+        "-V", "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+    )
+    parser.add_argument(
         "-p", "--prompt",
         help="Prompt to answer once, then exit (piping stdin works too)",
     )
@@ -125,6 +132,13 @@ def build_parser():
         help="Print only the answer, no prefix - useful in scripts and pipes",
     )
     parser.add_argument(
+        "--no-stream",
+        dest="stream",
+        action="store_false",
+        default=True,
+        help="Wait for the whole answer instead of printing it token by token",
+    )
+    parser.add_argument(
         "--list-models",
         action="store_true",
         help="List the GGUF models found in the models directory and exit",
@@ -154,13 +168,50 @@ def load_llm(model_path, args):
 
 
 def generate(llm, prompt, args):
-    result = llm(
-        prompt,
+    """Generate one answer, streaming token by token when possible.
+
+    Streaming matters on a phone: at 4 cores a 200-token answer can take
+    minutes, and without it the terminal just sits there.
+
+    Returns (text, streamed) - streamed tells the caller the text has
+    already been printed, so it must not be printed a second time.
+    """
+    kwargs = dict(
         max_tokens=args.max_tokens,
         temperature=args.temp,
         stop=["User:", "\n\n"],
     )
-    return result["choices"][0]["text"].strip()
+
+    if args.stream:
+        try:
+            chunks = llm(prompt, stream=True, **kwargs)
+        except Exception:
+            # Older llama-cpp-python builds lack streaming - fall back cleanly
+            # and let the caller print the whole answer instead.
+            fallback = build_parser().parse_args(["--no-stream"])
+            for key in vars(args):
+                if key != "stream":
+                    setattr(fallback, key, getattr(args, key))
+            return generate(llm, prompt, fallback)
+
+        text = []
+        for chunk in chunks:
+            piece = chunk["choices"][0].get("text", "")
+            if piece:
+                print(piece, end="", flush=True)
+                text.append(piece)
+        print()  # close the streamed line
+        return "".join(text).strip(), True
+
+    result = llm(prompt, **kwargs)
+    return result["choices"][0]["text"].strip(), False
+
+
+def _print_answer(answer, args):
+    if args.answer_only:
+        print(answer)
+    else:
+        print(f"\nAI> {answer}")
 
 
 def run_one_shot(llm, args, prompt):
@@ -168,13 +219,11 @@ def run_one_shot(llm, args, prompt):
     if not prompt:
         return _fail("the prompt is empty.")
     try:
-        answer = generate(llm, prompt, args)
+        answer, streamed = generate(llm, prompt, args)
     except Exception as exc:
         return _fail(f"generation failed: {exc}")
-    if args.answer_only:
-        print(answer)
-    else:
-        print(f"\nAI> {answer}")
+    if not streamed:
+        _print_answer(answer, args)
     return 0
 
 
@@ -193,11 +242,12 @@ def run_interactive(llm, model_path, args):
         if prompt.lower() in EXIT_COMMANDS:
             break
         try:
-            answer = generate(llm, prompt, args)
+            answer, streamed = generate(llm, prompt, args)
         except Exception as exc:
             print(f"\nError: {exc}")
             continue
-        print(f"\nAI> {answer}")
+        if not streamed:
+            _print_answer(answer, args)
     return 0
 
 
